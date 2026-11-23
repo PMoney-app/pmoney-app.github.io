@@ -2,7 +2,16 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
 import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
 import { T } from './i18n.js';
 
-const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
+// The login lasts only while the app / browser tab is open (sessionStorage).
+// Closing the app or logging out means the password must be typed again.
+const memStore = {};
+const sessionStore = {
+  getItem: k => { try { return sessionStorage.getItem(k); } catch { return memStore[k] ?? null; } },
+  setItem: (k, v) => { try { sessionStorage.setItem(k, v); } catch { memStore[k] = v; } },
+  removeItem: k => { try { sessionStorage.removeItem(k); } catch { delete memStore[k]; } }
+};
+try { Object.keys(localStorage).filter(k => /^sb-.*-auth-token/.test(k)).forEach(k => localStorage.removeItem(k)); } catch { /* ignore */ }
+const sb = createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { storage: sessionStore, persistSession: true, autoRefreshToken: true } });
 
 /* ---------- helpers ---------- */
 const $ = (s, r = document) => r.querySelector(s);
@@ -77,13 +86,15 @@ function bindAmount(input) {
 /* ---------- state ---------- */
 const S = {
   user: null, profile: null, cats: [], catMap: {}, page: 'home',
-  txOffset: 0, planPeriod: 'month', planOffset: 0, dashRange: 6,
+  txOffset: 0, planPeriod: 'month', planOffset: 0, dashRange: 6, dashOffset: 0, exp: {}, dashRows: null, dashCats: [],
   editing: null, budgets: [], budgetCat: null, charts: {}
 };
 
 /* ---------- auth: views ---------- */
 let authMethod = 'phone', emailMode = 'login';
+function clearPasswords() { ['#phone-pass', '#phone-pass2', '#auth-pass'].forEach(s => { const el = $(s); if (el) el.value = ''; }); }
 function showAuth() {
+  clearPasswords();
   $('#app').classList.add('hidden');
   if (!LANG) { $('#auth-view').classList.add('hidden'); $('#lang-view').classList.remove('hidden'); return; }
   $('#lang-view').classList.add('hidden'); $('#auth-view').classList.remove('hidden');
@@ -118,7 +129,7 @@ $$('#phone-mode button').forEach(b => b.onclick = () => {
   $('#name-row').classList.toggle('hidden', !su);
   $('#pass2-row').classList.toggle('hidden', !su);
   $('#su-name').required = su; $('#phone-pass2').required = su;
-  $('#phone-pass').autocomplete = su ? 'new-password' : 'current-password';
+  $('#phone-pass').autocomplete = su ? 'new-password' : 'off';
   applyI18n(); authMsg('');
 });
 $('#phone-form').onsubmit = async e => {
@@ -143,7 +154,7 @@ $('#phone-form').onsubmit = async e => {
     }
     const { error } = await sb.auth.signInWithPassword({ email: phoneEmail(phone), password });
     if (error) throw new Error(/invalid login/i.test(error.message) ? t('errPhoneLogin') : error.message);
-    authMsg('');
+    clearPasswords(); authMsg('');
   } catch (err) { authMsg(err.message, 'err'); }
   finally { btn.disabled = false; }
 };
@@ -346,10 +357,16 @@ async function renderHome() {
   ]);
   const err = [bal, mon, recent, cs, buds].find(r => r.error); if (err) return fail(err.error);
   const B = bal.data[0] || { income: 0, expense: 0 };
-  $('#bal-total').textContent = fmtK(B.income - B.expense);
   const M = mon.data[0] || { income: 0, expense: 0 };
-  $('#bal-month-in').textContent = fmt(M.income);
-  $('#bal-month-out').textContent = fmt(M.expense);
+  $('#bal-total').dataset.v = fmtK(B.income - B.expense);
+  $('#bal-month-in').dataset.v = fmt(M.income);
+  $('#bal-month-out').dataset.v = fmt(M.expense);
+  paintBalance();
+  S.exp.home = { name: 'home', rows: [
+    [t('totalBalance'), B.income - B.expense], [t('inThisMonth'), M.income], [t('outThisMonth'), M.expense], [],
+    [t('date'), t('type'), t('category'), t('amount'), t('source'), t('note')],
+    ...recent.data.map(txCsvRow)
+  ] };
 
   recent.data.forEach(x => txCache.set(x.id, x));
   $('#home-recent').innerHTML = recent.data.length ? recent.data.map(txRow).join('')
@@ -362,6 +379,18 @@ async function renderHome() {
   $('#home-budget').innerHTML = list.length ? list.map(budRow).join('')
     : `<div class="empty" style="padding:12px">${esc(t('noBudgetYet'))} <a data-goto="plan">${esc(t('setBudgetNow'))}</a></div>`;
 }
+
+/* balance show / hide (remembered on this phone) */
+const EYE_OPEN = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+const EYE_OFF = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+function paintBalance() {
+  const hide = store.get('hideBal') === '1';
+  ['#bal-total', '#bal-month-in', '#bal-month-out'].forEach(sel => {
+    const el = $(sel); el.textContent = hide ? '••••••' : (el.dataset.v ?? el.textContent);
+  });
+  $('#bal-eye').innerHTML = hide ? EYE_OFF : EYE_OPEN;
+}
+$('#bal-eye').onclick = () => { store.set('hideBal', store.get('hideBal') === '1' ? '0' : '1'); paintBalance(); };
 
 /* ---------- TRANSACTIONS ---------- */
 $('#tx-prev').onclick = () => { S.txOffset--; renderTx(); };
@@ -385,6 +414,10 @@ async function renderTx() {
     x.type === 'income' ? inn += x.amount : out += x.amount;
     (days[x.tx_date] ||= []).push(x);
   });
+  S.exp.tx = { name: 'transactions-' + ymd(a).slice(0, 7), rows: [
+    [t('txTitle'), monthLabel(a)], [t('sumIn'), inn], [t('sumOut'), out], [t('sumNet'), inn - out], [],
+    [t('date'), t('type'), t('category'), t('amount'), t('source'), t('note')], ...data.map(txCsvRow)
+  ] };
   $('#tx-sum-in').textContent = fmt(inn);
   $('#tx-sum-out').textContent = fmt(out);
   const net = $('#tx-sum-net'); net.textContent = fmt(inn - out);
@@ -505,6 +538,13 @@ async function renderPlan() {
   const p = isM ? t('periodMonth') : t('periodWeek');
   $('#plan-income').innerHTML = `${esc(t('incomeIn', { p }))} <b>${fmt(income)}</b> · ${esc(t('totalExpense'))} <b>${fmt(spentAll)}</b>` +
     (total ? `<br>${esc(t('ifOnBudget'))} <b class="${save < 0 ? 'c-out' : ''}">${fmt(save)}</b>` : '');
+  S.exp.plan = { name: 'plan-' + (isM ? 'month-' : 'week-') + ymd(a), rows: [
+    [t('planTitle'), $('#plan-label').textContent], [t('budgetTotal'), total], [t('budgetUsed'), used], [t('budgetLeft'), total - used],
+    [t('incomeIn', { p }), income], [t('totalExpense'), spentAll], [],
+    [t('category'), t('budget'), t('spent'), t('left'), '%'],
+    ...withB.map(x => [catName(catOf(x.category_id)), x.amount, x.spent, x.amount - x.spent, x.amount ? Math.round(x.spent / x.amount * 100) + '%' : '']),
+    ...noB.map(c => [catName(c), '', spent[c.id] || 0, '', ''])
+  ] };
   $('#plan-list').innerHTML = withB.map(budRow).join('') +
     (noB.length ? `<h4>${esc(t('noBudget'))}</h4>` + noB.map(c => `<div class="bud nobud" data-bud="${c.id}">
       <div class="bud-top"><span class="tx-ico expense">${esc(c.icon)}</span><span class="name">${esc(catName(c))}</span>
@@ -535,59 +575,90 @@ $('#budget-form').onsubmit = async e => {
 
 /* ---------- DASHBOARD ---------- */
 $$('#dash-range button').forEach(b => b.onclick = () => {
-  S.dashRange = +b.dataset.r;
+  S.dashRange = isNaN(+b.dataset.r) ? b.dataset.r : +b.dataset.r; S.dashOffset = 0;
   $$('#dash-range button').forEach(x => x.classList.toggle('active', x === b));
   renderDash();
 });
-$('#dash-cat-month').onchange = () => renderCatChart();
+$('#dash-prev').onclick = () => { S.dashOffset--; renderDash(); };
+$('#dash-next').onclick = () => { S.dashOffset++; renderDash(); };
+$('#dash-cat-month').onchange = () => {
+  const a = parseYmd($('#dash-cat-month').value);
+  renderCatChart(a, new Date(a.getFullYear(), a.getMonth() + 1, 0));
+};
 const PALETTE = ['#0f766e', '#f59e0b', '#3b82f6', '#ef4444', '#8b5cf6', '#10b981', '#ec4899', '#64748b', '#84cc16', '#06b6d4', '#f97316', '#a855f7'];
+const shortNum = v => v >= 1e6 ? (v / 1e6) + 'M' : v >= 1e3 ? (v / 1e3) + 'K' : v;
+const rangeText = (a, b) => { const ms = L().monthsS; return `${a.getDate()} ${ms[a.getMonth()]} – ${b.getDate()} ${ms[b.getMonth()]} ${b.getFullYear()}`; };
 
 async function renderDash() {
-  const n = S.dashRange;
-  const [a] = monthRange(-(n - 1)); const [, b] = monthRange(0);
-  const { data, error } = await sb.rpc('get_monthly_summary', { p_from: ymd(a), p_to: ymd(b) });
-  if (error) return fail(error);
-  const map = Object.fromEntries(data.map(r => [r.month.slice(0, 7), r]));
-  const months = [...Array(n)].map((_, i) => { const [m] = monthRange(i - n + 1); return m; });
-  const rows = months.map(m => map[ymd(m).slice(0, 7)] || { income: 0, expense: 0 });
+  const R = S.dashRange, daily = R === 'week' || R === 'month';
+  $('#dash-nav').classList.toggle('hidden', !daily);
+  $('#dash-cat-month').classList.toggle('hidden', daily);
+  let labels, rows, a, b, periodName;
+  if (daily) {
+    [a, b] = R === 'week' ? weekRange(S.dashOffset) : monthRange(S.dashOffset);
+    $('#dash-label').textContent = R === 'week' ? rangeText(a, b) : monthLabel(a);
+    const { data, error } = await sb.from('transactions').select('tx_date,type,amount')
+      .gte('tx_date', ymd(a)).lte('tx_date', ymd(b)).range(0, 9999);
+    if (error) return fail(error);
+    const days = []; for (let d = new Date(a); d <= b; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)) days.push(d);
+    const map = Object.fromEntries(days.map(d => [ymd(d), { income: 0, expense: 0 }]));
+    data.forEach(x => { if (map[x.tx_date]) map[x.tx_date][x.type] += x.amount; });
+    rows = days.map(d => map[ymd(d)]);
+    labels = days.map(d => R === 'week' ? `${L().days[d.getDay()]} ${d.getDate()}` : String(d.getDate()));
+    periodName = days.map(d => ymd(d));
+    $('#ch-title').textContent = t('chartDaily');
+  } else {
+    const n = R;
+    [a] = monthRange(-(n - 1)); [, b] = monthRange(0);
+    const { data, error } = await sb.rpc('get_monthly_summary', { p_from: ymd(a), p_to: ymd(b) });
+    if (error) return fail(error);
+    const map = Object.fromEntries(data.map(r => [r.month.slice(0, 7), r]));
+    const months = [...Array(n)].map((_, i) => { const [m] = monthRange(i - n + 1); return m; });
+    rows = months.map(m => map[ymd(m).slice(0, 7)] || { income: 0, expense: 0 });
+    labels = months.map(m => L().monthsS[m.getMonth()]);
+    periodName = months.map(m => `${L().monthsS[m.getMonth()]} ${m.getFullYear()}`);
+    $('#ch-title').textContent = t('chartMonthly');
+    const sel = $('#dash-cat-month'), cur = sel.value;
+    sel.innerHTML = months.slice().reverse().map(m => `<option value="${ymd(m)}">${L().monthsS[m.getMonth()]} ${m.getFullYear()}</option>`).join('');
+    if (cur && [...sel.options].some(o => o.value === cur)) sel.value = cur;
+  }
   const tin = rows.reduce((s, r) => s + r.income, 0), tout = rows.reduce((s, r) => s + r.expense, 0);
   $('#k-in').textContent = fmt(tin); $('#k-out').textContent = fmt(tout);
   const net = $('#k-net'); net.textContent = fmt(tin - tout); net.className = tin - tout < 0 ? 'c-out' : 'c-in';
   $('#k-rate').textContent = tin ? Math.round((tin - tout) / tin * 100) + '%' : '–';
+  S.dashRows = { periodName, rows, tin, tout, label: daily ? $('#dash-label').textContent : t(R === 6 ? 'months6' : 'months12'),
+    file: daily ? `${R}-${ymd(a)}` : `${R}months` };
 
-  if (!window.Chart) return;
-  S.charts.m?.destroy();
-  S.charts.m = new Chart($('#ch-monthly'), {
-    type: 'bar',
-    data: {
-      labels: months.map(m => L().monthsS[m.getMonth()]),
-      datasets: [
+  if (window.Chart) {
+    S.charts.m?.destroy();
+    S.charts.m = new Chart($('#ch-monthly'), {
+      type: 'bar',
+      data: { labels, datasets: [
         { label: t('income'), data: rows.map(r => r.income), backgroundColor: '#16a34a', borderRadius: 4 },
         { label: t('expense'), data: rows.map(r => r.expense), backgroundColor: '#dc2626', borderRadius: 4 }
-      ]
-    },
-    options: {
-      maintainAspectRatio: false,
-      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { family: 'Noto Sans Lao' } } },
-        tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fmt(c.raw)}` } } },
-      scales: { y: { ticks: { callback: v => v >= 1e6 ? (v / 1e6) + 'M' : v >= 1e3 ? (v / 1e3) + 'K' : v } }, x: { grid: { display: false } } }
-    }
-  });
-
-  const sel = $('#dash-cat-month'), cur = sel.value;
-  sel.innerHTML = months.slice().reverse().map(m => `<option value="${ymd(m)}">${L().monthsS[m.getMonth()]} ${m.getFullYear()}</option>`).join('');
-  if (cur && [...sel.options].some(o => o.value === cur)) sel.value = cur;
-  renderCatChart();
+      ] },
+      options: {
+        maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { family: 'Noto Sans Lao' } } },
+          tooltip: { callbacks: { label: c => `${c.dataset.label}: ${fmt(c.raw)}` } } },
+        scales: { y: { ticks: { callback: shortNum } }, x: { grid: { display: false }, ticks: { autoSkip: true, maxRotation: 0 } } }
+      }
+    });
+  }
+  if (daily) return renderCatChart(a, b);
+  const ca = parseYmd($('#dash-cat-month').value);
+  renderCatChart(ca, new Date(ca.getFullYear(), ca.getMonth() + 1, 0));
 }
-async function renderCatChart() {
-  const a = parseYmd($('#dash-cat-month').value), b = new Date(a.getFullYear(), a.getMonth() + 1, 0);
+async function renderCatChart(a, b) {
   const { data, error } = await sb.rpc('get_category_summary', { p_from: ymd(a), p_to: ymd(b) });
   if (error) return fail(error);
   const rows = data.filter(r => r.type === 'expense').sort((p, q) => q.total - p.total);
   const total = rows.reduce((s, r) => s + r.total, 0);
   S.charts.c?.destroy();
+  S.dashCats = rows.map(r => [catName(catOf(r.category_id)), r.total, total ? Math.round(r.total / total * 100) + '%' : '']);
+  exportDash();
   if (!rows.length) { $('#dash-cat-table').innerHTML = `<div class="empty">${esc(t('noExpenseMonth'))}</div>`; return; }
-  S.charts.c = new Chart($('#ch-cat'), {
+  if (window.Chart) S.charts.c = new Chart($('#ch-cat'), {
     type: 'doughnut',
     data: { labels: rows.map(r => catName(catOf(r.category_id))), datasets: [{ data: rows.map(r => r.total), backgroundColor: rows.map((_, i) => PALETTE[i % PALETTE.length]), borderWidth: 2 }] },
     options: { maintainAspectRatio: false, cutout: '62%', plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => `${c.label}: ${fmt(c.raw)}` } } } }
@@ -596,6 +667,37 @@ async function renderCatChart() {
     <span class="sw" style="background:${PALETTE[i % PALETTE.length]}"></span><span class="n">${esc(c.icon)} ${esc(catName(c))}</span>
     <b>${fmt(r.total)}</b><span class="p">${Math.round(r.total / total * 100)}%</span></div>`; }).join('');
 }
+function exportDash() {
+  const D = S.dashRows; if (!D) return;
+  S.exp.dash = { name: 'dashboard-' + D.file, rows: [
+    [t('dash'), D.label], [],
+    [t('period'), t('income'), t('expense'), t('savings')],
+    ...D.periodName.map((p, i) => [p, D.rows[i].income, D.rows[i].expense, D.rows[i].income - D.rows[i].expense]),
+    [t('total'), D.tin, D.tout, D.tin - D.tout], [],
+    [t('chartCat'), t('amount'), '%'], ...(S.dashCats || [])
+  ] };
+}
+
+/* ---------- CSV (each page) ---------- */
+const txCsvRow = x => [x.tx_date, t(x.type), catName(catOf(x.category_id)), x.amount, x.source || '', x.note || ''];
+function downloadCsv(name, rows) {
+  const q = v => /^[\d.-]+$/.test(String(v ?? '')) ? String(v) : `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const csv = '﻿' + rows.map(r => r.map(q).join(',')).join('\r\n');
+  const file = `money-${name}-${ymd(new Date())}.csv`.replace(/[^\w.\-]+/g, '_');
+  if (NATIVE && typeof NATIVE.saveFile === 'function') {
+    try { if (NATIVE.saveFile(file, 'text/csv', csv)) return; } catch { /* fall back */ }
+    return toast(t('csvFail'));
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = file; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+$('#btn-csv').onclick = () => {
+  const e = S.exp[S.page];
+  if (!e || !e.rows.length) return toast(t('csvEmpty'));
+  downloadCsv(e.name, e.rows);
+};
 
 /* ---------- SETTINGS ---------- */
 let sType = 'expense';
@@ -675,12 +777,7 @@ $('#s-export').onclick = async () => {
     if (error) return fail(error);
     all.push(...data); if (data.length < 1000) break; from += 1000;
   }
-  const q = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
-  const csv = '﻿' + [t('csvHead'),
-    ...all.map(x => [x.tx_date, t(x.type), catName(catOf(x.category_id)), x.amount, x.note].map(q).join(','))].join('\n');
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-  a.download = `money-${ymd(new Date())}.csv`; a.click();
+  downloadCsv('all', [[t('date'), t('type'), t('category'), t('amount'), t('source'), t('note')], ...all.map(txCsvRow)]);
 };
 
 /* ---------- boot ---------- */

@@ -228,3 +228,12 @@ select.mini{width:auto;padding:6px 8px;font-size:13px}
 .native-banner{display:flex;align-items:center;gap:10px;background:#fff7ed;border:1px solid #fed7aa;border-radius:14px;padding:12px;margin-bottom:12px}
 .native-banner div{flex:1;display:flex;flex-direction:column;font-size:12.5px;color:var(--muted)}
 .native-banner b{color:var(--text);font-size:14px}
+
+/* v5: balance eye, dash nav, csv button */
+.balance-card{position:relative}
+.eye-btn{position:absolute;top:14px;right:14px;width:40px;height:40px;border:0;border-radius:12px;background:rgba(255,255,255,.14);color:#fff;display:grid;place-items:center;cursor:pointer}
+.eye-btn:active{background:rgba(255,255,255,.28)}
+.csv-btn{border:1px solid var(--line,#e2e8e6);background:#fff;color:var(--ink,#1f2937);border-radius:12px;height:38px;padding:0 12px;font:inherit;font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;cursor:pointer;margin-left:auto;margin-right:10px}
+.csv-btn:active{background:#f1f5f4}
+#dash-range button{font-size:14px;padding-left:4px;padding-right:4px}
+#dash-nav.hidden{display:none}

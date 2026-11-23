@@ -57,7 +57,7 @@
         </div>
       </label>
       <label><span data-i18n="password"></span>
-        <input type="password" id="phone-pass" minlength="6" maxlength="72" autocomplete="current-password" required>
+        <input type="password" id="phone-pass" minlength="6" maxlength="72" autocomplete="off" required>
       </label>
       <label id="pass2-row" class="hidden"><span data-i18n="password2"></span>
         <input type="password" id="phone-pass2" minlength="6" maxlength="72" autocomplete="new-password">
@@ -85,6 +85,7 @@
 <div id="app" class="hidden">
   <header class="topbar">
     <h2 id="page-title"></h2>
+    <button class="csv-btn" id="btn-csv" type="button">⬇️ CSV</button>
     <button class="avatar-btn" id="btn-settings" aria-label="settings"><span class="avatar sm" id="top-avatar"></span></button>
   </header>
 
@@ -93,6 +94,7 @@
     <section class="page" id="page-home">
       <div class="hello" id="hello"></div>
       <div class="balance-card">
+        <button class="eye-btn" id="bal-eye" type="button" aria-label="show / hide"></button>
         <div class="label" data-i18n="totalBalance"></div>
         <div class="balance" id="bal-total">0 ₭</div>
         <div class="bal-row">
@@ -168,8 +170,15 @@
     <!-- DASHBOARD -->
     <section class="page hidden" id="page-dash">
       <div class="seg" id="dash-range">
+        <button data-r="week" data-i18n="rangeWeek"></button>
+        <button data-r="month" data-i18n="rangeMonth"></button>
         <button data-r="6" class="active" data-i18n="months6"></button>
         <button data-r="12" data-i18n="months12"></button>
+      </div>
+      <div class="month-nav hidden" id="dash-nav">
+        <button class="icon-btn" id="dash-prev">‹</button>
+        <span id="dash-label"></span>
+        <button class="icon-btn" id="dash-next">›</button>
       </div>
       <div class="kpis">
         <div class="kpi"><span data-i18n="income"></span><b class="c-in" id="k-in">0</b></div>
@@ -178,7 +187,7 @@
         <div class="kpi"><span data-i18n="saveRate"></span><b id="k-rate">0%</b></div>
       </div>
       <div class="card">
-        <h3 data-i18n="chartMonthly"></h3>
+        <h3 id="ch-title" data-i18n="chartMonthly"></h3>
         <div class="chart-box"><canvas id="ch-monthly"></canvas></div>
       </div>
       <div class="card">
