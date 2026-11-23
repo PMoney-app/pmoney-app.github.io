@@ -95,6 +95,7 @@ let authMethod = 'phone', emailMode = 'login';
 function clearPasswords() { ['#phone-pass', '#phone-pass2', '#auth-pass'].forEach(s => { const el = $(s); if (el) el.value = ''; }); }
 function showAuth() {
   clearPasswords();
+  if (!$('#phone-input').value && store.get('lastPhone')) $('#phone-input').value = store.get('lastPhone');
   $('#app').classList.add('hidden');
   if (!LANG) { $('#auth-view').classList.add('hidden'); $('#lang-view').classList.remove('hidden'); return; }
   $('#lang-view').classList.add('hidden'); $('#auth-view').classList.remove('hidden');
@@ -154,6 +155,7 @@ $('#phone-form').onsubmit = async e => {
     }
     const { error } = await sb.auth.signInWithPassword({ email: phoneEmail(phone), password });
     if (error) throw new Error(/invalid login/i.test(error.message) ? t('errPhoneLogin') : error.message);
+    store.set('lastPhone', $('#phone-input').value.replace(/[^\d\s+]/g, '').trim());
     clearPasswords(); authMsg('');
   } catch (err) { authMsg(err.message, 'err'); }
   finally { btn.disabled = false; }
@@ -782,6 +784,8 @@ $('#s-export').onclick = async () => {
 
 /* ---------- boot ---------- */
 applyI18n();
+// remember the last phone number used on this device (the password is never stored)
+if (store.get('lastPhone') && !$('#phone-input').value) $('#phone-input').value = store.get('lastPhone');
 showAuthStep('phone');
 const { data: { session } } = await sb.auth.getSession();
 if (!session) showAuth();
