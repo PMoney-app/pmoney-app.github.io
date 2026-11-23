@@ -327,7 +327,7 @@ function txRow(x) {
   const c = catOf(x.category_id);
   return `<div class="tx-item" data-tx="${x.id}">
     <div class="tx-ico ${x.type}">${esc(c.icon)}</div>
-    <div class="tx-main"><div class="t">${esc(catName(c))}</div><div class="s">${esc(x.note || dayLabel(x.tx_date))}</div></div>
+    <div class="tx-main"><div class="t">${esc(catName(c))}</div><div class="s">${x.source ? `<span class="src-tag">${esc(x.source)}</span>` : ''}${esc(x.note || dayLabel(x.tx_date))}</div></div>
     <div class="tx-amt ${x.type}">${x.type === 'income' ? '+' : '−'}${fmt(x.amount)}</div>
     <button class="tx-del" data-deltx="${x.id}" aria-label="${esc(t('delete'))}">🗑️</button></div>`;
 }
@@ -598,7 +598,28 @@ async function renderCatChart() {
 
 /* ---------- SETTINGS ---------- */
 let sType = 'expense';
-$('#btn-settings').onclick = () => { renderProfileBits(); renderCatSettings(); $('#settings-sheet').classList.remove('hidden'); };
+const INGEST_URL = SUPABASE_URL + '/functions/v1/notify-ingest';
+function renderIngest() {
+  const tok = S.profile?.ingest_token;
+  $('#s-ingest-url').value = tok ? `${INGEST_URL}?token=${tok}` : '';
+}
+$('#btn-settings').onclick = () => { renderProfileBits(); renderCatSettings(); renderIngest(); $('#settings-sheet').classList.remove('hidden'); };
+$('#s-copy-url').onclick = async () => {
+  const el = $('#s-ingest-url');
+  try { await navigator.clipboard.writeText(el.value); } catch { el.select(); document.execCommand('copy'); }
+  toast(t('copied'));
+};
+$('#s-regen').onclick = async () => {
+  if (!confirm(t('confirmRegen'))) return;
+  const tok = [...crypto.getRandomValues(new Uint8Array(32))].map(b => b.toString(16).padStart(2, '0')).join('');
+  const { data, error } = await sb.from('profiles').update({ ingest_token: tok }).eq('id', S.user.id).select().single();
+  if (error) return fail(error);
+  S.profile = data; renderIngest(); toast(t('saved'));
+};
+// pick up transactions recorded from notifications while the app was in the background
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && S.user && !$('#app').classList.contains('hidden')) refresh();
+});
 $('#s-edit').onclick = () => { $('#settings-sheet').classList.add('hidden'); openProfile(false); };
 $$('#s-cat-type button').forEach(b => b.onclick = () => {
   sType = b.dataset.t; $$('#s-cat-type button').forEach(x => x.classList.toggle('active', x === b)); renderCatSettings();

@@ -209,3 +209,15 @@ select.mini{width:auto;padding:6px 8px;font-size:13px}
 .tx-del{border:0;background:var(--out-soft);width:34px;height:34px;border-radius:10px;font-size:15px;
   cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center;opacity:.85}
 .tx-del:active{opacity:1;transform:scale(.94)}
+/* ---------- v3: auto-record from notifications ---------- */
+.auto-box{background:var(--bg);border-radius:14px;padding:12px}
+.auto-box p.muted{margin:0 0 4px}
+.copy-row{display:flex;gap:8px;margin-top:4px}
+.copy-row input{font-size:12px;color:var(--muted);font-family:ui-monospace,monospace}
+.howto{background:#fff;border-radius:10px;padding:10px 12px;margin-top:8px;font-size:13px}
+.howto summary{font-weight:600;cursor:pointer}
+.howto ol{padding-left:18px;margin:8px 0 2px}
+.howto li{margin-bottom:6px;line-height:1.5}
+.howto code{display:block;background:var(--bg);padding:6px 8px;border-radius:6px;font-size:11px;word-break:break-all;margin-top:4px}
+.auto-box .link-btn{margin-top:10px}
+.src-tag{display:inline-block;background:#eef1f0;color:var(--muted);font-size:10.5px;padding:1px 6px;border-radius:6px;margin-right:5px}

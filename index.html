@@ -291,6 +291,17 @@
       <input id="s-cat-name" maxlength="40" data-i18n-ph="newCatPh" required>
       <button class="btn primary" data-i18n="add"></button>
     </form>
+    <h4 data-i18n="autoTitle"></h4>
+    <div class="auto-box">
+      <p class="muted" data-i18n="autoIntro"></p>
+      <label><span data-i18n="autoLink"></span>
+        <div class="copy-row"><input id="s-ingest-url" readonly><button type="button" class="btn small" id="s-copy-url" data-i18n="copy"></button></div>
+      </label>
+      <p class="hint" data-i18n="autoKeep"></p>
+      <details class="howto"><summary data-i18n="howIphone"></summary><div data-i18n="stepsIphone"></div></details>
+      <details class="howto"><summary data-i18n="howAndroid"></summary><div data-i18n="stepsAndroid"></div></details>
+      <button type="button" class="link-btn" id="s-regen" data-i18n="regenToken"></button>
+    </div>
     <button class="btn block ghost" id="s-export" data-i18n="exportCsv"></button>
     <button class="btn block danger-ghost" id="s-logout" data-i18n="logout"></button>
   </div>

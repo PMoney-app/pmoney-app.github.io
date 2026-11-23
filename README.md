@@ -26,3 +26,4 @@ Personal income/expense tracker — mobile-first PWA.
 Any static server, e.g. `npx serve .` then open http://localhost:3000
 - Storage bucket `avatars` (public read, each user writes only to `<uid>/`)
 - Phone sign-up is free (no SMS): edge function `phone-signup` creates a confirmed account with login email `<856number>@phone.money-app.la`; the app logs in with phone + password
+- Edge function `notify-ingest`: receives bank-app notifications (iPhone Shortcuts / Android MacroDroid) at `/functions/v1/notify-ingest?token=<profiles.ingest_token>` with JSON {title, body, app}; parses amount, income/expense, category and saves a transaction (source code in supabase/functions/notify-ingest)
