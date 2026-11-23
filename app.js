@@ -1,5 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.4';
-import { SUPABASE_URL, SUPABASE_KEY } from './config.js';
+import * as CFG from './config.js';
+const { SUPABASE_URL, SUPABASE_KEY } = CFG;
+const SUPPORT_WHATSAPP = CFG.SUPPORT_WHATSAPP || '';
 import { T } from './i18n.js';
 
 // The login lasts only while the app / browser tab is open (sessionStorage).
@@ -130,6 +132,10 @@ $$('#phone-mode button').forEach(b => b.onclick = () => {
   $('#name-row').classList.toggle('hidden', !su);
   $('#pass2-row').classList.toggle('hidden', !su);
   $('#su-name').required = su; $('#phone-pass2').required = su;
+  // hidden sign-up fields must never block the login form
+  $('#su-name').disabled = !su; $('#phone-pass2').disabled = !su;
+  if (!su) $('#phone-pass2').value = '';
+  $('#phone-pass').minLength = su ? 8 : 6;
   $('#phone-pass').autocomplete = su ? 'new-password' : 'off';
   applyI18n(); authMsg('');
 });
@@ -138,7 +144,7 @@ $('#phone-form').onsubmit = async e => {
   const phone = normalizePhone($('#phone-input').value);
   const password = $('#phone-pass').value;
   if (!phone) return authMsg(t('errPhone'), 'err');
-  if (password.length < 6) return authMsg(t('errPassShort'), 'err');
+  if (password.length < (phoneMode === 'signup' ? 8 : 6)) return authMsg(t('errPassShort'), 'err');
   const btn = $('#phone-submit'); btn.disabled = true; authMsg(t('working'));
   try {
     if (phoneMode === 'signup') {
@@ -159,6 +165,17 @@ $('#phone-form').onsubmit = async e => {
     clearPasswords(); authMsg('');
   } catch (err) { authMsg(err.message, 'err'); }
   finally { btn.disabled = false; }
+};
+
+/* forgot password: no SMS, so the admin sets a temporary password */
+$('#forgot-link').onclick = () => {
+  $('#forgot-box').classList.toggle('hidden');
+  const c = $('#forgot-contact');
+  if (SUPPORT_WHATSAPP) {
+    const p = normalizePhone($('#phone-input').value);
+    c.href = `https://wa.me/${SUPPORT_WHATSAPP.replace(/\D/g, '')}?text=${encodeURIComponent(t('forgotWaText') + (p ? ' 0' + p.slice(3) : ''))}`;
+    c.classList.remove('hidden');
+  }
 };
 
 /* email fallback */
@@ -289,6 +306,7 @@ async function startApp() {
   if (!store.get('lang') && S.profile?.lang) { LANG = S.profile.lang; store.set('lang', LANG); }
   applyI18n();
   if (!S.profile?.display_name) await openProfile(true);
+  if (S.user?.user_metadata?.must_change_password) openPass(true);
   $('#app').classList.remove('hidden');
   renderProfileBits();
   syncNative();
@@ -327,6 +345,7 @@ document.addEventListener('click', e => {
   if (c) return c.closest('.sheet-bg').classList.add('hidden');
   if (e.target.classList.contains('sheet-bg')) {
     if (e.target.id === 'profile-sheet' && pfMandatory) return;
+    if (e.target.id === 'pass-sheet' && passMandatory) return;
     e.target.classList.add('hidden');
   }
   const del = e.target.closest('[data-deltx]');
@@ -682,18 +701,20 @@ function exportDash() {
 
 /* ---------- CSV (each page) ---------- */
 const txCsvRow = x => [x.tx_date, t(x.type), catName(catOf(x.category_id)), x.amount, x.source || '', x.note || ''];
-function downloadCsv(name, rows) {
-  const q = v => /^[\d.-]+$/.test(String(v ?? '')) ? String(v) : `"${String(v ?? '').replace(/"/g, '""')}"`;
-  const csv = '﻿' + rows.map(r => r.map(q).join(',')).join('\r\n');
-  const file = `money-${name}-${ymd(new Date())}.csv`.replace(/[^\w.\-]+/g, '_');
+function saveText(file, mime, text) {
   if (NATIVE && typeof NATIVE.saveFile === 'function') {
-    try { if (NATIVE.saveFile(file, 'text/csv', csv)) return; } catch { /* fall back */ }
+    try { if (NATIVE.saveFile(file, mime, text)) return; } catch { /* fall back */ }
     return toast(t('csvFail'));
   }
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  a.href = URL.createObjectURL(new Blob([text], { type: mime + ';charset=utf-8' }));
   a.download = file; document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+function downloadCsv(name, rows) {
+  const q = v => /^[\d.-]+$/.test(String(v ?? '')) ? String(v) : `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const csv = '﻿' + rows.map(r => r.map(q).join(',')).join('\r\n');
+  saveText(`money-${name}-${ymd(new Date())}.csv`.replace(/[^\w.\-]+/g, '_'), 'text/csv', csv);
 }
 $('#btn-csv').onclick = () => {
   const e = S.exp[S.page];
@@ -703,7 +724,6 @@ $('#btn-csv').onclick = () => {
 
 /* ---------- SETTINGS ---------- */
 let sType = 'expense';
-const INGEST_URL = SUPABASE_URL + '/functions/v1/notify-ingest';
 const NATIVE = window.MoneyApp || null; // present only inside the Android app
 const isAndroidBrowser = !NATIVE && /Android/i.test(navigator.userAgent);
 function nativeEnabled() { try { return NATIVE ? NATIVE.isListenerEnabled() : false; } catch { return false; } }
@@ -720,22 +740,78 @@ function openNativeSettings() { try { NATIVE.openListenerSettings(); } catch (e)
 $('#banner-enable').onclick = openNativeSettings;
 $('#s-native-enable').onclick = openNativeSettings;
 $('#s-apk').classList.toggle('hidden', !isAndroidBrowser);
-function renderIngest() {
-  const tok = S.profile?.ingest_token;
-  $('#s-ingest-url').value = tok ? `${INGEST_URL}?token=${tok}` : '';
-}
-$('#btn-settings').onclick = () => { renderProfileBits(); renderCatSettings(); renderIngest(); syncNative(); $('#settings-sheet').classList.remove('hidden'); };
-$('#s-copy-url').onclick = async () => {
-  const el = $('#s-ingest-url');
-  try { await navigator.clipboard.writeText(el.value); } catch { el.select(); document.execCommand('copy'); }
-  toast(t('copied'));
+$('#s-auto-other').classList.toggle('hidden', !!NATIVE || isAndroidBrowser);
+$('#btn-settings').onclick = () => {
+  renderProfileBits(); renderCatSettings(); syncNative(); checkAdmin();
+  $('#settings-sheet').classList.remove('hidden');
 };
-$('#s-regen').onclick = async () => {
-  if (!confirm(t('confirmRegen'))) return;
-  const tok = [...crypto.getRandomValues(new Uint8Array(32))].map(b => b.toString(16).padStart(2, '0')).join('');
-  const { data, error } = await sb.from('profiles').update({ ingest_token: tok }).eq('id', S.user.id).select().single();
-  if (error) return fail(error);
-  S.profile = data; renderIngest(); syncNative(); toast(t('saved'));
+
+/* change password (also forced after an admin reset) */
+let passMandatory = false;
+function openPass(mandatory) {
+  passMandatory = mandatory;
+  $('#np1').value = ''; $('#np2').value = '';
+  $('#pass-must').classList.toggle('hidden', !mandatory);
+  $('#pass-close').classList.toggle('hidden', mandatory);
+  $('#pass-sheet').classList.remove('hidden');
+}
+$('#s-change-pass').onclick = () => { $('#settings-sheet').classList.add('hidden'); openPass(false); };
+$('#pass-form').onsubmit = async e => {
+  e.preventDefault();
+  const a = $('#np1').value, b = $('#np2').value;
+  if (a.length < 8) return toast(t('errPassShort'));
+  if (a !== b) return toast(t('errPassMatch'));
+  const btn = $('#np-save'); btn.disabled = true;
+  const { error } = await sb.auth.updateUser({ password: a, data: { must_change_password: false } });
+  btn.disabled = false;
+  $('#np1').value = ''; $('#np2').value = '';
+  if (error) return toast('❌ ' + (/different/i.test(error.message) ? t('errSamePass') : error.message));
+  passMandatory = false; $('#pass-sheet').classList.add('hidden'); toast(t('passChanged'));
+};
+
+/* admin panel: only shown when the server says this login is an admin */
+async function adminCall(body) {
+  const { data, error } = await sb.functions.invoke('admin-tools', { body });
+  if (error) {
+    let code = ''; try { code = (await error.context.json()).error; } catch { /* ignore */ }
+    const e = new Error(code || error.message); e.code = code; throw e;
+  }
+  return data;
+}
+let adminChecked = false;
+async function checkAdmin() {
+  if (adminChecked && $('#admin-box').classList.contains('hidden')) return;
+  try {
+    const d = await adminCall({ action: 'stats' });
+    $('#admin-stats').textContent = t('adminStats', { u: fmt(d.users), t: fmt(d.transactions) });
+    $('#admin-box').classList.remove('hidden');
+  } catch { $('#admin-box').classList.add('hidden'); }
+  adminChecked = true;
+}
+$('#admin-lookup').onclick = async () => {
+  const box = $('#admin-result'); box.classList.remove('hidden'); box.textContent = t('working');
+  try {
+    const d = await adminCall({ action: 'lookup', phone: $('#admin-phone').value });
+    const u = d.user, last = u.last_login ? new Date(u.last_login).toLocaleString() : '–';
+    box.innerHTML = `<b>${esc(u.name || '—')}</b> · ${esc(u.phone)}<br><span class="muted">${esc(t('adminLastLogin'))}: ${esc(last)}</span>
+      <button type="button" class="btn block danger-ghost" id="admin-reset">${esc(t('adminReset'))}</button>`;
+    $('#admin-reset').onclick = async () => {
+      if (!confirm(t('adminResetConfirm', { n: u.name || u.phone }))) return;
+      try {
+        const r = await adminCall({ action: 'reset', phone: u.phone });
+        box.innerHTML = `${esc(t('adminTempPass'))}<div class="temp-pass">${esc(r.password)}</div>
+          <button type="button" class="btn small" id="temp-copy">${esc(t('copy'))}</button><p class="hint">${esc(t('adminTempHint'))}</p>`;
+        $('#temp-copy').onclick = async () => { try { await navigator.clipboard.writeText(r.password); toast(t('copied')); } catch { /* ignore */ } };
+      } catch (e) { box.textContent = '❌ ' + e.message; }
+    };
+  } catch (e) { box.textContent = e.code === 'not_found' ? t('adminNotFound') : e.code === 'phone' ? t('errPhone') : '❌ ' + e.message; }
+};
+$('#admin-backup').onclick = async () => {
+  const btn = $('#admin-backup'); btn.disabled = true; toast(t('working'));
+  try {
+    const d = await adminCall({ action: 'backup' });
+    saveText(`money-backup-${ymd(new Date())}.json`, 'application/json', JSON.stringify(d, null, 1));
+  } catch (e) { fail(e); } finally { btn.disabled = false; }
 };
 // pick up transactions recorded from notifications while the app was in the background
 document.addEventListener('visibilitychange', () => {
@@ -770,7 +846,8 @@ $('#s-logout').onclick = async () => {
   try { NATIVE?.clearToken(); } catch { /* ignore */ }
   await sb.auth.signOut();
   $('#settings-sheet').classList.add('hidden');
-  S.profile = null; showAuthStep('phone'); authMethod = 'phone';
+  S.profile = null; adminChecked = false; $('#admin-box').classList.add('hidden'); $('#admin-result').classList.add('hidden');
+  showAuthStep('phone'); authMethod = 'phone';
 };
 $('#s-export').onclick = async () => {
   const all = []; let from = 0;

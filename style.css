@@ -237,3 +237,15 @@ select.mini{width:auto;padding:6px 8px;font-size:13px}
 .csv-btn:active{background:#f1f5f4}
 #dash-range button{font-size:14px;padding-left:4px;padding-right:4px}
 #dash-nav.hidden{display:none}
+
+/* v6: security + admin */
+.admin-box{border:1px dashed #0f766e;border-radius:14px;padding:12px 14px;margin:14px 0;background:#f4fbfa}
+.admin-box h4{margin-top:0}
+.admin-result{margin-top:10px;padding:10px;border-radius:12px;background:#fff;font-size:14px;line-height:1.5}
+.admin-result .btn{margin-top:8px}
+.temp-pass{font-family:monospace;font-size:26px;letter-spacing:2px;font-weight:700;margin:8px 0;color:#0b4f55;user-select:all}
+.forgot-box{margin-top:10px;padding:12px;border-radius:12px;background:#f1f5f4;font-size:14px;line-height:1.6;text-align:left}
+.forgot-box .btn{margin-top:10px}
+.foot-links{text-align:center;font-size:13px;margin-top:14px}
+.foot-links a{color:#0f766e;text-decoration:none}
+#forgot-link{display:block;text-align:center;margin-top:8px;cursor:pointer}

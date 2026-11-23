@@ -48,7 +48,7 @@
         <button type="button" data-pmode="signup" data-i18n="signup"></button>
       </div>
       <label id="name-row" class="hidden"><span data-i18n="displayName"></span>
-        <input id="su-name" maxlength="60" autocomplete="name" data-i18n-ph="displayNamePh">
+        <input id="su-name" maxlength="60" autocomplete="name" data-i18n-ph="displayNamePh" disabled>
       </label>
       <label><span data-i18n="phoneLabel"></span>
         <div class="phone-wrap">
@@ -60,7 +60,7 @@
         <input type="password" id="phone-pass" minlength="6" maxlength="72" autocomplete="off" required>
       </label>
       <label id="pass2-row" class="hidden"><span data-i18n="password2"></span>
-        <input type="password" id="phone-pass2" minlength="6" maxlength="72" autocomplete="new-password">
+        <input type="password" id="phone-pass2" minlength="8" maxlength="72" autocomplete="new-password" disabled>
       </label>
       <button type="submit" class="btn primary block" id="phone-submit" data-i18n="login"></button>
     </form>
@@ -77,6 +77,10 @@
     </form>
 
     <p id="auth-msg" class="msg"></p>
+    <a class="switch-method" id="forgot-link" data-i18n="forgotPass"></a>
+    <div class="forgot-box hidden" id="forgot-box"><span data-i18n="forgotHelp"></span>
+      <a class="btn primary block hidden" id="forgot-contact" target="_blank" data-i18n="contactAdmin"></a></div>
+    <p class="foot-links"><a href="guide.html" target="_blank" data-i18n="guideLink"></a> · <a href="privacy.html" target="_blank" data-i18n="privacyLink"></a></p>
     <a id="switch-method" class="switch-method hidden" data-i18n="useEmail"></a>
   </div>
 </section>
@@ -312,18 +316,36 @@
         <button type="button" class="btn primary block hidden" id="s-native-enable" data-i18n="nativeEnable"></button>
       </div>
       <a id="s-apk" class="btn primary block apk-btn hidden" href="https://eieeessmqfavwtmzzaoc.supabase.co/storage/v1/object/public/downloads/money-app.apk" data-i18n="getApk"></a>
-      <details class="howto" id="s-manual"><summary data-i18n="manualSetup"></summary>
-      <label><span data-i18n="autoLink"></span>
-        <div class="copy-row"><input id="s-ingest-url" readonly><button type="button" class="btn small" id="s-copy-url" data-i18n="copy"></button></div>
+      <p id="s-auto-other" class="hint hidden" data-i18n="autoOther"></p>
+    </div>
+    <h4 data-i18n="security"></h4>
+    <button class="btn block ghost" id="s-change-pass" data-i18n="changePass"></button>
+    <div class="admin-box hidden" id="admin-box">
+      <h4 data-i18n="adminTitle"></h4>
+      <p class="muted" id="admin-stats"></p>
+      <label><span data-i18n="adminPhone"></span>
+        <div class="copy-row"><input type="tel" id="admin-phone" inputmode="tel" data-i18n-ph="phoneHint">
+        <button type="button" class="btn small" id="admin-lookup" data-i18n="adminLookup"></button></div>
       </label>
-      <p class="hint" data-i18n="autoKeep"></p>
-      <details class="howto"><summary data-i18n="howIphone"></summary><div data-i18n="stepsIphone"></div></details>
-      <details class="howto"><summary data-i18n="howAndroid"></summary><div data-i18n="stepsAndroid"></div></details>
-      <button type="button" class="link-btn" id="s-regen" data-i18n="regenToken"></button>
-      </details>
+      <div id="admin-result" class="admin-result hidden"></div>
+      <button type="button" class="btn block ghost" id="admin-backup" data-i18n="adminBackup"></button>
     </div>
     <button class="btn block ghost" id="s-export" data-i18n="exportCsv"></button>
     <button class="btn block danger-ghost" id="s-logout" data-i18n="logout"></button>
+    <p class="foot-links"><a href="guide.html" target="_blank" data-i18n="guideLink"></a> · <a href="privacy.html" target="_blank" data-i18n="privacyLink"></a></p>
+  </div>
+</div>
+
+<div class="sheet-bg hidden" id="pass-sheet">
+  <div class="sheet">
+    <div class="sheet-head"><h3 data-i18n="changePass"></h3><button class="icon-btn" id="pass-close" data-close>✕</button></div>
+    <p class="muted hidden" id="pass-must" data-i18n="mustChange"></p>
+    <form id="pass-form">
+      <label><span data-i18n="newPass"></span><input type="password" id="np1" minlength="8" maxlength="72" autocomplete="new-password" required></label>
+      <label><span data-i18n="password2"></span><input type="password" id="np2" minlength="8" maxlength="72" autocomplete="new-password" required></label>
+      <p class="hint" data-i18n="passRule"></p>
+      <button class="btn primary block" id="np-save" data-i18n="save"></button>
+    </form>
   </div>
 </div>
 
