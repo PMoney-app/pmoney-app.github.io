@@ -278,6 +278,7 @@ async function startApp() {
   if (!S.profile?.display_name) await openProfile(true);
   $('#app').classList.remove('hidden');
   renderProfileBits();
+  syncNative();
   await loadCats();
   go(S.page);
 }
@@ -599,11 +600,27 @@ async function renderCatChart() {
 /* ---------- SETTINGS ---------- */
 let sType = 'expense';
 const INGEST_URL = SUPABASE_URL + '/functions/v1/notify-ingest';
+const NATIVE = window.MoneyApp || null; // present only inside the Android app
+const isAndroidBrowser = !NATIVE && /Android/i.test(navigator.userAgent);
+function nativeEnabled() { try { return NATIVE ? NATIVE.isListenerEnabled() : false; } catch { return false; } }
+function syncNative() {
+  if (!NATIVE) return;
+  try { if (S.profile?.ingest_token) NATIVE.setToken(S.profile.ingest_token); } catch { /* ignore */ }
+  const on = nativeEnabled();
+  $('#native-banner').classList.toggle('hidden', on);
+  $('#s-native').classList.remove('hidden');
+  $('#s-native-on').classList.toggle('hidden', !on);
+  $('#s-native-enable').classList.toggle('hidden', on);
+}
+function openNativeSettings() { try { NATIVE.openListenerSettings(); } catch (e) { fail(e); } }
+$('#banner-enable').onclick = openNativeSettings;
+$('#s-native-enable').onclick = openNativeSettings;
+$('#s-apk').classList.toggle('hidden', !isAndroidBrowser);
 function renderIngest() {
   const tok = S.profile?.ingest_token;
   $('#s-ingest-url').value = tok ? `${INGEST_URL}?token=${tok}` : '';
 }
-$('#btn-settings').onclick = () => { renderProfileBits(); renderCatSettings(); renderIngest(); $('#settings-sheet').classList.remove('hidden'); };
+$('#btn-settings').onclick = () => { renderProfileBits(); renderCatSettings(); renderIngest(); syncNative(); $('#settings-sheet').classList.remove('hidden'); };
 $('#s-copy-url').onclick = async () => {
   const el = $('#s-ingest-url');
   try { await navigator.clipboard.writeText(el.value); } catch { el.select(); document.execCommand('copy'); }
@@ -614,11 +631,11 @@ $('#s-regen').onclick = async () => {
   const tok = [...crypto.getRandomValues(new Uint8Array(32))].map(b => b.toString(16).padStart(2, '0')).join('');
   const { data, error } = await sb.from('profiles').update({ ingest_token: tok }).eq('id', S.user.id).select().single();
   if (error) return fail(error);
-  S.profile = data; renderIngest(); toast(t('saved'));
+  S.profile = data; renderIngest(); syncNative(); toast(t('saved'));
 };
 // pick up transactions recorded from notifications while the app was in the background
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && S.user && !$('#app').classList.contains('hidden')) refresh();
+  if (document.visibilityState === 'visible' && S.user && !$('#app').classList.contains('hidden')) { syncNative(); refresh(); }
 });
 $('#s-edit').onclick = () => { $('#settings-sheet').classList.add('hidden'); openProfile(false); };
 $$('#s-cat-type button').forEach(b => b.onclick = () => {
@@ -646,6 +663,7 @@ $('#s-cat-form').onsubmit = async e => {
   await loadCats(); renderCatSettings(); toast(t('catAdded'));
 };
 $('#s-logout').onclick = async () => {
+  try { NATIVE?.clearToken(); } catch { /* ignore */ }
   await sb.auth.signOut();
   $('#settings-sheet').classList.add('hidden');
   S.profile = null; showAuthStep('phone'); authMethod = 'phone';
