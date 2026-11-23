@@ -46,7 +46,7 @@ a{color:var(--pri);text-decoration:none;font-size:13px;cursor:pointer}
 .auth{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
 .auth-card{background:#fff;border-radius:20px;padding:28px 22px;width:100%;max-width:380px;box-shadow:0 8px 30px #0000000d;text-align:center}
 .auth-card form{text-align:left;margin-top:8px}
-.auth-logo{font-size:44px}
+.auth-logo{width:84px;height:84px;border-radius:20px;display:block;margin:0 auto;box-shadow:0 6px 18px rgba(8,91,99,.25)}
 .auth-card h1{font-size:22px;margin:6px 0}
 .auth-card .seg{margin-top:18px}
 .msg{font-size:13px;min-height:18px;margin-top:10px;text-align:center}
