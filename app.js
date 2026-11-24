@@ -731,7 +731,7 @@ function syncNative() {
   if (!NATIVE) return;
   try { if (S.profile?.ingest_token) NATIVE.setToken(S.profile.ingest_token); } catch { /* ignore */ }
   const on = nativeEnabled();
-  $('#native-banner').classList.toggle('hidden', on);
+  $('#native-banner').classList.add('hidden'); // never shown on the home page; turn it on from Settings instead
   $('#s-native').classList.remove('hidden');
   $('#s-native-on').classList.toggle('hidden', !on);
   $('#s-native-enable').classList.toggle('hidden', on);
